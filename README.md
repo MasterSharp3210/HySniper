@@ -7,7 +7,7 @@ To use the bot, you need to follow steps here:
 
 - **Second Step**: Go to *https://developer.hypixel.net* and login with your Hypixel profile.
 
-- **Third Step**: Generate an Hypixel API key and copy that.
+- **Third Step**: Generate an Hypixel API key and copy that. *NOTE: The key expire after 30 days so consider to change that*
 
 - **Quarter Step**: Open the HySniper.py file and paste the API key in the specific API line.
 
