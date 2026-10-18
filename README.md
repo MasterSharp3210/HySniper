@@ -18,4 +18,4 @@ To use the bot, you need to follow steps here:
 - After this, in the Player line write the name of player you want to track. Then save and start the bot.
 
 # Updates
-In newer update I'll extend support for Duels and Skywars. Possible also SkyBlock. I'll create a tutorial soon to config all of this
+In newer update I'll extend support for Duels and Skywars. Possible also SkyBlock. I'll create a tutorial soon to config all of this. I'm also creating an Extreme mode to snipe people while vanished
