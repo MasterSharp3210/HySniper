@@ -240,6 +240,7 @@ def build_status_report(is_online, game_type, mode_formatted, map_name, previous
     return title, description, color
 
 def main():
+    print("=== HySniper v.2.0.0 ===")
     player_name = input("Enter Minecraft Username to track: ").strip()
     if not player_name:
         print("[LOG] No username provided. Exiting.", flush=True)
