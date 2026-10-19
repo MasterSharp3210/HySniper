@@ -15,7 +15,7 @@ To use the bot, you need to follow steps here:
 
 - **Sixth Step**: Copy the Webhook URL into the specific URL line in HySniper.py
 
-- Now, you can save the file and open it. Insert the player to snipe and the normal or extreme mode.
+Now, you can save the file and open it. Insert the player to snipe and the normal or extreme mode.
 
 # Updates
 In newer update I'll extend support for Duels and Skywars. Possible also SkyBlock. I'll create a tutorial soon to config all of this.
