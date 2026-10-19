@@ -4,9 +4,8 @@ from pathlib import Path
 import time
 import requests
 
-PLAYER_NAME = "PLAYER_TO_SNIPE" # Replace with the Minecraft username of the player you want to track
-HYPIXEL_API_KEY = "API_KEY_HERE" # Replace with your Hypixel API key (https://developer.hypixel.net)
-DISCORD_WEBHOOK_URL = "DISCORD_WEBHOOK_URL_HERE" # Replace with your Discord webhook URL (https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)
+HYPIXEL_API_KEY = "API_KEY_HERE"  # Replace with your Hypixel API key (https://developer.hypixel.net)
+DISCORD_WEBHOOK_URL = "DISCORD_WEBHOOK_URL_HERE"  # Replace with your Discord webhook URL (https://support.discord.com/hc/en-us/articles/228383668-Intro-to-Webhooks)
 CHECK_INTERVAL = 60
 
 HYPIXEL_API_URL = "https://api.hypixel.net/v2/player"
@@ -16,7 +15,8 @@ STATE_FILE = Path("bedwars_stats.json")
 session = requests.Session()
 session.headers.update({"User-Agent": "BedWarsStatsBot/1.0"})
 
-def send_embed(title, description, color):
+
+def send_embed(player_name, title, description, color):
     payload = {
         "username": "BedWars Stats Tracker",
         "embeds": [
@@ -24,7 +24,7 @@ def send_embed(title, description, color):
                 "title": title,
                 "description": description,
                 "color": color,
-                "footer": {"text": f"Hypixel BedWars | {PLAYER_NAME}"},
+                "footer": {"text": f"Hypixel BedWars | {player_name}"},
                 "timestamp": datetime.now(timezone.utc).isoformat(),
             }
         ],
@@ -44,10 +44,8 @@ def send_embed(title, description, color):
 def get_uuid(username):
     try:
         response = session.get(MOJANG_API_URL.format(username), timeout=15)
-
         if response.status_code != 200:
             return None
-
         return response.json().get("id")
     except (requests.RequestException, ValueError):
         return None
@@ -82,17 +80,29 @@ def fetch_stats(uuid):
         deaths = int(bedwars.get("deaths_bedwars", 0))
         beds_broken = int(bedwars.get("beds_broken_bedwars", 0))
         beds_lost = int(bedwars.get("beds_lost_bedwars", 0))
+        wins = int(bedwars.get("wins_bedwars", 0))
         winstreak = bedwars.get("winstreak")
+
+        last_login = player.get("lastLogin", 0)
+        last_logout = player.get("lastLogout", 0)
+        is_online = last_login > last_logout
 
         return {
             "FKDR": round(
                 final_kills / final_deaths if final_deaths else final_kills, 2
             ),
             "WS": int(winstreak) if winstreak is not None else None,
-            "KDR": round(kills / deaths if deaths else kills, 2),
+            "KDR": round(
+                kills / deaths if deaths else kills, 2
+            ),
             "BBLR": round(
                 beds_broken / beds_lost if beds_lost else beds_broken, 2
             ),
+            "final_kills": final_kills,
+            "kills": kills,
+            "beds_broken": beds_broken,
+            "wins": wins,
+            "online": is_online,
         }
 
     except (requests.RequestException, ValueError, TypeError, KeyError):
@@ -105,7 +115,6 @@ def load_stats():
             return json.loads(STATE_FILE.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         pass
-
     return None
 
 
@@ -121,7 +130,9 @@ def format_value(value):
 
 
 def build_recap(current):
+    status_emoji = "🟢 Online" if current.get("online") else "🔴 Offline"
     return (
+        f"🌐 **Status:** `{status_emoji}`\n"
         f"🎯 **FKDR:** `{format_value(current['FKDR'])}`\n"
         f"🔥 **WS:** `{format_value(current['WS'])}`\n"
         f"⚔️ **KDR:** `{format_value(current['KDR'])}`\n"
@@ -187,86 +198,155 @@ def build_update(previous, current):
     return title, description, color
 
 
-def send_win_notifications(previous, current):
+def send_win_notifications(player_name, previous, current):
     old_ws = previous.get("WS")
     new_ws = current.get("WS")
 
-    if old_ws is None or new_ws is None:
-        return
-
-    if new_ws <= old_ws:
+    if old_ws is None or new_ws is None or new_ws <= old_ws:
         return
 
     wins_detected = new_ws - old_ws
 
     for index in range(wins_detected):
         streak = old_ws + index + 1
-
         description = (
-            f"🏆 **Victory detected for {PLAYER_NAME}!**\n\n"
+            f"🏆 **Victory detected for {player_name}!**\n\n"
             f"🔥 **Win Streak:** `{streak - 1}` → `{streak}`\n"
             f"🎉 **Win #{index + 1} detected since the last check**\n\n"
             "━━━━━━━━━━━━━━━━━━\n"
             "### 👤 CURRENT STATS\n"
             + build_recap(current)
         )
+        send_embed(player_name, "🏆 BEDWARS VICTORY!", description, 0x2ECC71)
 
-        send_embed("🏆 BEDWARS VICTORY!", description, 0x2ECC71)
 
-
-def main():
-    print("Bot initialized successfully.", flush=True)
-
-    if (
-        not HYPIXEL_API_KEY
-        or HYPIXEL_API_KEY == "YOUR_HYPIXEL_API_KEY"
-        or not DISCORD_WEBHOOK_URL
-        or DISCORD_WEBHOOK_URL == "YOUR_DISCORD_WEBHOOK_URL"
-    ):
-        while True:
-            time.sleep(CHECK_INTERVAL)
-
-    uuid = None
-
-    while uuid is None:
-        uuid = get_uuid(PLAYER_NAME)
-        if uuid is None:
-            time.sleep(CHECK_INTERVAL)
-
+def normal_mode_loop(player_name, uuid):
     previous = load_stats()
-
     while True:
         try:
             current = fetch_stats(uuid)
-
             if current is not None:
                 if previous is None:
                     previous = current
                     save_stats(current)
                 else:
-                    old_ws = previous.get("WS")
-                    new_ws = current.get("WS")
-
-                    if (
-                        old_ws is not None
-                        and new_ws is not None
-                        and new_ws > old_ws
-                    ):
-                        send_win_notifications(previous, current)
-
+                    send_win_notifications(player_name, previous, current)
                     update = build_update(previous, current)
-
                     if update:
                         title, description, color = update
-                        send_embed(title, description, color)
+                        send_embed(player_name, title, description, color)
+                    save_stats(current)
+                    previous = current
+        except Exception:
+            pass
+        time.sleep(CHECK_INTERVAL)
+
+
+def extreme_mode_loop(player_name, uuid):
+    previous = load_stats()
+    while True:
+        try:
+            current = fetch_stats(uuid)
+            if current is not None:
+                if previous is None:
+                    previous = current
+                    save_stats(current)
+                else:
+                    wins_diff = current["wins"] - previous.get("wins", current["wins"])
+                    beds_diff = current["beds_broken"] - previous.get("beds_broken", current["beds_broken"])
+                    fk_diff = current["final_kills"] - previous.get("final_kills", current["final_kills"])
+                    kills_diff = current["kills"] - previous.get("kills", current["kills"])
+
+                    if wins_diff > 0:
+                        for _ in range(wins_diff):
+                            desc = (
+                                f"🏆 **Victory detected for {player_name}!**\n\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                "### 👤 CURRENT STATS\n"
+                                + build_recap(current)
+                            )
+                            send_embed(player_name, "🏆 BEDWARS VICTORY!", desc, 0x2ECC71)
+
+                    if beds_diff > 0:
+                        for _ in range(beds_diff):
+                            desc = (
+                                f"🛏️ **Bed broken by {player_name}!**\n\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                "### 👤 CURRENT STATS\n"
+                                + build_recap(current)
+                            )
+                            send_embed(player_name, "🛏️ BED BROKEN!", desc, 0x3498DB)
+
+                    if fk_diff > 0:
+                        for _ in range(fk_diff):
+                            desc = (
+                                f"🎯 **Final Kill by {player_name}!**\n\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                "### 👤 CURRENT STATS\n"
+                                + build_recap(current)
+                            )
+                            send_embed(player_name, "🎯 FINAL KILL!", desc, 0x9B59B6)
+
+                    if kills_diff > 0:
+                        for _ in range(kills_diff):
+                            desc = (
+                                f"⚔️ **Kill by {player_name}!**\n\n"
+                                "━━━━━━━━━━━━━━━━━━\n"
+                                "### 👤 CURRENT STATS\n"
+                                + build_recap(current)
+                            )
+                            send_embed(player_name, "⚔️ KILL!", desc, 0xE67E22)
 
                     save_stats(current)
                     previous = current
-
         except Exception:
             pass
-
         time.sleep(CHECK_INTERVAL)
+
+
+def main():
+    print("=== BedWars Stats Bot ===")
+    player_name = input("Enter the Minecraft username to track: ").strip()
+    if not player_name:
+        print("Invalid username. Exiting.")
+        return
+
+    print("\nSelect Bot Mode:")
+    print("1) Normal mode")
+    print("2) Extreme mode")
+    
+    choice = input("Enter your choice (1 or 2): ").strip()
+    
+    if choice == "2":
+        print(f"Starting bot for '{player_name}' in EXTREME MODE...", flush=True)
+        mode = "extreme"
+    else:
+        print(f"Starting bot for '{player_name}' in NORMAL MODE...", flush=True)
+        mode = "normal"
+
+    if (
+        not HYPIXEL_API_KEY
+        or HYPIXEL_API_KEY == "API_KEY_HERE"
+        or not DISCORD_WEBHOOK_URL
+        or DISCORD_WEBHOOK_URL == "DISCORD_WEBHOOK_URL_HERE"
+    ):
+        print("Please configure your API Key and Webhook URL in the script!")
+        while True:
+            time.sleep(CHECK_INTERVAL)
+
+    uuid = None
+    while uuid is None:
+        uuid = get_uuid(player_name)
+        if uuid is None:
+            print(f"Failed to fetch UUID for {player_name}. Retrying in {CHECK_INTERVAL}s...")
+            time.sleep(CHECK_INTERVAL)
+
+    print(f"Successfully fetched UUID for {player_name}: {uuid}", flush=True)
+
+    if mode == "extreme":
+        extreme_mode_loop(player_name, uuid)
+    else:
+        normal_mode_loop(player_name, uuid)
 
 
 if __name__ == "__main__":
