@@ -15,7 +15,7 @@ To use the bot, you need to follow steps here:
 
 - **Sixth Step**: Copy the Webhook URL into the specific URL line in HySniper.py
 
-- After this, in the Player line write the name of player you want to track. Then save and start the bot.
+- Now, you can save the file and open it. Insert the player to snipe and the normal or extreme mode.
 
 # Updates
-In newer update I'll extend support for Duels and Skywars. Possible also SkyBlock. I'll create a tutorial soon to config all of this. I'm also creating an Extreme mode to snipe people while vanished
+In newer update I'll extend support for Duels and Skywars. Possible also SkyBlock. I'll create a tutorial soon to config all of this.
