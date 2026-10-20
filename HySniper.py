@@ -46,6 +46,8 @@ def test_connections(player_name, uuid):
             timeout=15,
         )
         print(f"[LOG] Hypixel API test response code: {response.status_code}", flush=True)
+        if response.status_code != 200:
+            print(f"[LOG] Hypixel API test body: {response.text}", flush=True)
     except requests.RequestException as e:
         print(f"[LOG] Hypixel API test error: {e}", flush=True)
 
@@ -104,7 +106,6 @@ def fetch_status(uuid):
             return None
 
         data = response.json()
-        print(f"[LOG] Status API Raw JSON Response: {data}", flush=True)
         if not data.get("success"):
             return None
 
@@ -123,18 +124,21 @@ def fetch_stats(uuid):
             timeout=15,
         )
 
+        print(f"[LOG] Stats API HTTP Code: {response.status_code}", flush=True)
         if response.status_code != 200:
-            print(f"[LOG] Stats API HTTP Code: {response.status_code}", flush=True)
+            print(f"[LOG] Stats API Error Response: {response.text}", flush=True)
             return None
 
         data = response.json()
         player = data.get("player")
 
         if not data.get("success") or not player:
+            print(f"[LOG] API success is False or player data is missing.", flush=True)
             return None
 
         bedwars = player.get("stats", {}).get("Bedwars", {})
         if not bedwars:
+            print(f"[LOG] Player has no BedWars stats or API is disabled.", flush=True)
             return None
 
         final_kills = int(bedwars.get("final_kills_bedwars", 0))
@@ -159,20 +163,33 @@ def fetch_stats(uuid):
         print(f"[LOG] Error fetching stats: {e}", flush=True)
         return None
 
-def load_stats():
+def load_stats(uuid):
     try:
         if STATE_FILE.exists():
             print("[LOG] Loading previous stats from local file...", flush=True)
-            return json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data.get(uuid)
     except (OSError, ValueError):
         pass
     return None
 
-def save_stats(stats):
+def save_stats(uuid, stats):
     try:
-        STATE_FILE.write_text(json.dumps(stats, indent=2), encoding="utf-8")
-    except OSError:
-        pass
+        data = {}
+        if STATE_FILE.exists():
+            try:
+                data = json.loads(STATE_FILE.read_text(encoding="utf-8"))
+                if not isinstance(data, dict):
+                    data = {}
+            except (OSError, ValueError):
+                data = {}
+        
+        data[uuid] = stats
+        STATE_FILE.write_text(json.dumps(data, indent=2), encoding="utf-8")
+        print(f"[LOG] Stats successfully saved to {STATE_FILE}", flush=True)
+    except OSError as e:
+        print(f"[LOG] Error saving stats to file or using computer: {e}", flush=True)
 
 def format_value(value):
     return "N/A" if value is None else str(value)
@@ -180,7 +197,7 @@ def format_value(value):
 def build_status_report(is_online, game_type, mode_formatted, map_name, previous, current):
     status_emoji = "🟢" if is_online else "🔴"
     status_text = "Online" if is_online else "Offline"
-    
+
     description = (
         f"**Status:** `{status_emoji} {status_text}`\n"
         f"📌 **Mode:** `{mode_formatted}`\n"
@@ -259,13 +276,13 @@ def main():
 
     print(f"[LOG] Tracking started for {player_name} (UUID: {uuid})", flush=True)
 
-    previous_stats = load_stats()
+    previous_stats = load_stats(uuid)
 
     while True:
         try:
             print("[LOG] Checking player status and stats...", flush=True)
             status = fetch_status(uuid)
-            
+
             is_online = False
             game_type = "Offline/Unknown"
             mode_raw = "Lobby"
@@ -292,12 +309,12 @@ def main():
                 print(f"[CONSOLE] Stats -> {current_stats}", flush=True)
                 if previous_stats is None:
                     previous_stats = current_stats
-                    save_stats(current_stats)
+                    save_stats(uuid, current_stats)
 
                 title, description, color = build_status_report(is_online, game_type, mode_formatted, map_name, previous_stats, current_stats)
                 send_embed(title, description, color, player_name)
 
-                save_stats(current_stats)
+                save_stats(uuid, current_stats)
                 previous_stats = current_stats
             else:
                 print("[LOG] Could not fetch current player stats.", flush=True)
