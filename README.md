@@ -1,5 +1,5 @@
 # HySniper
-HySniper Bot to snipe player stats of Hypixel Bedwars
+HySniper Bot to snipe player stats of Hypixel Bedwars mainly.
 
 # How to use
 To use the bot, you need to follow steps here:
